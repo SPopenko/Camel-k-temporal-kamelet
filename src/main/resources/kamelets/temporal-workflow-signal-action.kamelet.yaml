@@ -1,0 +1,73 @@
+apiVersion: camel.apache.org/v1
+kind: Kamelet
+metadata:
+  name: temporal-workflow-signal-action
+  labels:
+    camel.apache.org/kamelet.type: "action"
+  annotations:
+    camel.apache.org/kamelet.support.level: "Preview"
+    camel.apache.org/catalog.version: "1.0.0"
+    camel.apache.org/provider: "Community"
+    camel.apache.org/kamelet.group: "Temporal"
+    camel.apache.org/kamelet.namespace: "Workflow"
+    camel.apache.org/display-name: "Temporal Signal Workflow Action"
+    camel.apache.org/description: >-
+      Send a named signal to a running Temporal workflow instance.
+      The message body is forwarded as the signal payload.
+      This is a fire-and-forget operation; the response body will be null.
+spec:
+  definition:
+    title: "Temporal Signal Workflow Action"
+    description: "Sends a named signal to a running Temporal workflow"
+    required:
+      - host
+      - workflowId
+      - signalName
+    type: object
+    properties:
+      host:
+        title: Temporal Host
+        description: Hostname of the Temporal frontend gRPC service
+        type: string
+        default: "localhost"
+        x-descriptors:
+          - urn:camel:group:connection
+      port:
+        title: Temporal Port
+        description: gRPC port of the Temporal frontend service
+        type: integer
+        default: 7233
+        x-descriptors:
+          - urn:camel:group:connection
+      namespace:
+        title: Namespace
+        description: Temporal namespace for workflow isolation
+        type: string
+        default: "default"
+      workflowId:
+        title: Workflow ID
+        description: The ID of the running workflow instance to signal
+        type: string
+      signalName:
+        title: Signal Name
+        description: >-
+          Name of the signal method defined on the workflow interface
+          (must match @SignalMethod name annotation)
+        type: string
+  types:
+    in:
+      mediaType: application/json
+    out:
+      mediaType: application/json
+  template:
+    from:
+      uri: "kamelet:source"
+      steps:
+        - to:
+            uri: "temporal:signal"
+            parameters:
+              host: "{{host}}"
+              port: "{{port}}"
+              namespace: "{{namespace}}"
+              workflowId: "{{workflowId}}"
+              signalName: "{{signalName}}"
