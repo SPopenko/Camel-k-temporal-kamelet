@@ -76,17 +76,20 @@ temporal://query?host=localhost&port=7233&namespace=default&workflowId=myId&quer
 | `CamelTemporalWorkflowResult` | `TEMPORAL_WORKFLOW_RESULT` | Set by producer after query |
 
 ## Test Approach
-- In-memory Temporal via `TestWorkflowEnvironment` / `TestWorkflowExtension` (JUnit 5)
+- In-memory Temporal via `TestWorkflowEnvironment` (JUnit 5 `@BeforeEach`/`@AfterEach`)
+- **Important**: Do NOT use `TestWorkflowExtension` — it auto-generates a task queue that won't match test constants
+- Instead: manually call `testEnv.newWorker(TASK_QUEUE)` to register on the correct queue
 - Test workflow: `GreetingWorkflow` interface + `GreetingWorkflowImpl`
 - No Docker required for unit tests
-- Tests: testStartWorkflow, testSignalWorkflow, testQueryWorkflow, testStartWorkflowWithCustomId
+- Tests: testStartWorkflow, testStartWorkflowWithCustomId, testSignalWorkflow, testQueryWorkflow
+- Inject in-memory client: `endpoint.setExternalWorkflowClient(workflowClient)`
 
 ## Implementation Status
-- [ ] pom.xml
-- [ ] Java source files
-- [ ] Kamelet YAMLs
-- [ ] Service discovery
-- [ ] Test files
-- [ ] docker-compose.yml
-- [ ] README.md
-- [ ] Tests passing
+- [x] pom.xml
+- [x] Java source files
+- [x] Kamelet YAMLs
+- [x] Service discovery
+- [x] Test files
+- [x] docker-compose.yml
+- [x] README.md
+- [x] Tests passing — `mvn clean test` → 4/4 GREEN
