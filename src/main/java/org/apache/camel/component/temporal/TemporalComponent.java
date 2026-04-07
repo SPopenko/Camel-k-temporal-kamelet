@@ -8,7 +8,7 @@ import java.util.Map;
 /**
  * Apache Camel component for Temporal.io workflow engine.
  *
- * URI format: temporal://start|signal|query?host=...&port=...&namespace=...
+ * URI format: temporal:start|signal|query?host=...&port=...&namespace=...
  */
 public class TemporalComponent extends DefaultComponent {
 
@@ -18,7 +18,7 @@ public class TemporalComponent extends DefaultComponent {
         String operation = remaining;
         if (operation == null || operation.isBlank()) {
             throw new IllegalArgumentException(
-                "Operation is required in Temporal URI. Use: temporal://start|signal|query");
+                "Operation is required in Temporal URI. Use: temporal:start|signal|query");
         }
 
         TemporalConfiguration configuration = new TemporalConfiguration();

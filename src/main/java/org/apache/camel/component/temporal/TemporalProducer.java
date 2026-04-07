@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Temporal producer. Dispatches to start, signal, or query operations on Temporal workflows.
  *
- * Operation dispatch is based on the URI path (e.g., temporal://start, temporal://signal).
+ * Operation dispatch is based on the URI path (e.g., temporal:start, temporal:signal).
  * Configuration can be overridden per-message via Exchange headers (see TemporalConstants).
  *
  * Note: the query operation returns the workflow's query result as a String. Query handler

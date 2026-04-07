@@ -46,7 +46,7 @@ class TemporalProducerTest {
     }
 
     /**
-     * Test starting a workflow via the Camel temporal://start endpoint.
+     * Test starting a workflow via the Camel temporal:start endpoint.
      * Verifies that the workflow is started and the workflowId is returned.
      */
     @Test
