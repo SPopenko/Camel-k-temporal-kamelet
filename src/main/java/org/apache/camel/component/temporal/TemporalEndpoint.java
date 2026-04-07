@@ -64,18 +64,7 @@ public class TemporalEndpoint extends DefaultEndpoint {
         if (workflowClient == null) {
             synchronized (this) {
                 if (workflowClient == null) {
-                    String target = configuration.getHost() + ":" + configuration.getPort();
-                    LOG.info("Creating Temporal WorkflowClient connecting to {}", target);
-                    WorkflowServiceStubsOptions stubOptions =
-                        WorkflowServiceStubsOptions.newBuilder()
-                            .setTarget(target)
-                            .build();
-                    serviceStubs = WorkflowServiceStubs.newServiceStubs(stubOptions);
-                    WorkflowClientOptions clientOptions =
-                        WorkflowClientOptions.newBuilder()
-                            .setNamespace(configuration.getNamespace())
-                            .build();
-                    workflowClient = WorkflowClient.newInstance(serviceStubs, clientOptions);
+                    workflowClient = createWorkflowClient();
                 }
             }
         }
@@ -106,4 +95,47 @@ public class TemporalEndpoint extends DefaultEndpoint {
 
     public String getOperation() { return operation; }
     public TemporalConfiguration getConfiguration() { return configuration; }
+
+    private WorkflowClient createWorkflowClient() {
+        String target = resolveTarget();
+        LOG.info("Creating Temporal WorkflowClient connecting to {}", target);
+        serviceStubs = WorkflowServiceStubs.newServiceStubs(createServiceStubsOptions(target));
+        return WorkflowClient.newInstance(serviceStubs, createWorkflowClientOptions());
+    }
+
+    private WorkflowServiceStubsOptions createServiceStubsOptions(String target) {
+        return WorkflowServiceStubsOptions.newBuilder()
+            .setTarget(target)
+            .build();
+    }
+
+    private WorkflowClientOptions createWorkflowClientOptions() {
+        return WorkflowClientOptions.newBuilder()
+            .setNamespace(configuration.getNamespace())
+            .build();
+    }
+
+    private String resolveTarget() {
+        String host = configuration.getHost();
+        if (isExplicitTarget(host)) {
+            return host;
+        }
+        return host + ":" + configuration.getPort();
+    }
+
+    private boolean isExplicitTarget(String host) {
+        if (host == null || host.isBlank()) {
+            return false;
+        }
+        if (host.contains("://")) {
+            return true;
+        }
+        if (host.startsWith("[") && host.contains("]")) {
+            int closingBracket = host.indexOf(']');
+            return closingBracket < host.length() - 1 && host.charAt(closingBracket + 1) == ':';
+        }
+        int firstColon = host.indexOf(':');
+        int lastColon = host.lastIndexOf(':');
+        return firstColon > 0 && firstColon == lastColon;
+    }
 }
