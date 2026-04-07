@@ -12,7 +12,7 @@ Custom Apache Camel component + Kamelet YAML definitions enabling Camel-K routes
 ## Project Structure
 ```
 /home/user/Camel-k-temporal-kamelet/
-├── CLAUDE.md                    ← this file
+├── AGENTS.md                    ← this file
 ├── LICENSE
 ├── README.md
 ├── docker-compose.yml

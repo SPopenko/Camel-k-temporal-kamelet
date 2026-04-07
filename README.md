@@ -8,9 +8,9 @@ An Apache Camel component and set of Camel-K Kamelets for integrating with [Temp
 
 | Kamelet | Operation | Description |
 |---|---|---|
-| `temporal-workflow-start-action` | `temporal://start` | Start a new Temporal workflow execution |
-| `temporal-workflow-signal-action` | `temporal://signal` | Send a signal/event to a running workflow |
-| `temporal-workflow-query-action` | `temporal://query` | Query the current state of a workflow |
+| `temporal-workflow-start-action` | `temporal:start` | Start a new Temporal workflow execution |
+| `temporal-workflow-signal-action` | `temporal:signal` | Send a signal/event to a running workflow |
+| `temporal-workflow-query-action` | `temporal:query` | Query the current state of a workflow |
 
 ---
 
@@ -61,6 +61,18 @@ Unit tests use Temporal's in-memory `TestWorkflowEnvironment` — no Docker or e
 mvn clean test
 ```
 
+### Run Docker-backed integration tests
+
+These tests require a real Temporal server running from `docker-compose`.
+
+```bash
+docker-compose up -d
+mvn -Pdocker-it verify
+docker-compose down
+```
+
+`mvn test` runs only the in-memory unit tests. `mvn -Pdocker-it verify` runs the unit suite plus the live Docker-backed suite in `src/test/java/org/apache/camel/component/temporal/TemporalDockerIT.java`.
+
 ### Build the JAR
 
 ```bash
@@ -87,6 +99,64 @@ Stop the server:
 docker-compose down
 ```
 
+After the compose stack is up you can run the live CamelContext integration suite with:
+
+```bash
+mvn -Pdocker-it verify
+```
+
+That suite starts a real Temporal worker in the test JVM and verifies:
+- Java DSL `start`, `signal`, and `query`
+- Kamelet `start`, `signal`, and `query`
+
+---
+
+## Integration Tests
+
+### Docker Compose Integration Suite
+
+This suite uses the local `docker-compose.yml` Temporal stack on `localhost:7233`.
+
+```bash
+docker-compose up -d
+mvn -Pdocker-it verify
+docker-compose down
+```
+
+### Camel K End-to-End Suite on kind
+
+This suite provisions a local `kind` cluster, installs Camel K, deploys Temporal inside Kubernetes, deploys a Temporal worker, then runs Camel K integrations that exercise the same `start`, `signal`, and `query` workflow flow end to end.
+
+Prerequisites:
+- Docker
+- `kubectl`
+- `kamel`
+- network access to download `kind` on first run
+
+Bootstrap the environment:
+
+```bash
+./e2e/scripts/setup-kind.sh
+```
+
+Run the full end-to-end scenario:
+
+```bash
+./e2e/scripts/run-camelk-e2e.sh
+```
+
+Tear the local cluster down when finished:
+
+```bash
+./e2e/scripts/teardown-kind.sh
+```
+
+Notes:
+- The Camel K suite uses `kind`, not `docker-compose`.
+- The Camel K integrations run from self-managed images built from `e2e/apps`, while the operator still manages the deployment lifecycle.
+- The Temporal worker image registers `GreetingWorkflowImpl` on the `greetings` task queue.
+- The route runner image packages the Temporal component and Kamelets, then executes the `start`, `signal`, and `query` flows as one-shot Camel K integrations.
+
 ---
 
 ## Usage
@@ -94,9 +164,9 @@ docker-compose down
 ### Component URI Format
 
 ```
-temporal://start?host=localhost&port=7233&namespace=default&taskQueue=myQueue&workflowType=MyWorkflow
-temporal://signal?host=localhost&port=7233&namespace=default&workflowId=myId&signalName=approve
-temporal://query?host=localhost&port=7233&namespace=default&workflowId=myId&queryType=getStatus
+temporal:start?host=localhost&port=7233&namespace=default&taskQueue=myQueue&workflowType=MyWorkflow
+temporal:signal?host=localhost&port=7233&namespace=default&workflowId=myId&signalName=approve
+temporal:query?host=localhost&port=7233&namespace=default&workflowId=myId&queryType=getStatus
 ```
 
 ### Exchange Headers
