@@ -1,0 +1,87 @@
+apiVersion: camel.apache.org/v1
+kind: Kamelet
+metadata:
+  name: temporal-workflow-start-action
+  labels:
+    camel.apache.org/kamelet.type: "action"
+  annotations:
+    camel.apache.org/kamelet.support.level: "Preview"
+    camel.apache.org/catalog.version: "1.0.0"
+    camel.apache.org/provider: "Community"
+    camel.apache.org/kamelet.group: "Temporal"
+    camel.apache.org/kamelet.namespace: "Workflow"
+    camel.apache.org/display-name: "Temporal Start Workflow Action"
+    camel.apache.org/description: >-
+      Start a new Temporal workflow execution. The message body is forwarded as
+      the workflow input payload. The workflow ID is returned in the message body
+      and also set as the CamelTemporalWorkflowId header.
+spec:
+  definition:
+    title: "Temporal Start Workflow Action"
+    description: "Starts a new Temporal workflow execution"
+    required:
+      - host
+      - taskQueue
+      - workflowType
+    type: object
+    properties:
+      host:
+        title: Temporal Host
+        description: Hostname of the Temporal frontend gRPC service
+        type: string
+        default: "localhost"
+        x-descriptors:
+          - urn:camel:group:connection
+      port:
+        title: Temporal Port
+        description: gRPC port of the Temporal frontend service
+        type: integer
+        default: 7233
+        x-descriptors:
+          - urn:camel:group:connection
+      namespace:
+        title: Namespace
+        description: Temporal namespace for workflow isolation
+        type: string
+        default: "default"
+      taskQueue:
+        title: Task Queue
+        description: Name of the Temporal task queue where workers are polling
+        type: string
+      workflowType:
+        title: Workflow Type
+        description: >-
+          The workflow type name (typically the simple name of the
+          @WorkflowInterface annotated interface)
+        type: string
+      workflowId:
+        title: Workflow ID
+        description: >-
+          Optional workflow instance ID. If not provided, a UUID is auto-generated.
+          Use a deterministic ID to enable safe re-use with workflow ID reuse policies.
+        type: string
+        default: ""
+      workflowExecutionTimeoutSeconds:
+        title: Execution Timeout (seconds)
+        description: Maximum time in seconds allowed for the workflow execution (0 = unlimited)
+        type: integer
+        default: 3600
+  types:
+    in:
+      mediaType: application/json
+    out:
+      mediaType: text/plain
+  template:
+    from:
+      uri: "kamelet:source"
+      steps:
+        - to:
+            uri: "temporal:start"
+            parameters:
+              host: "{{host}}"
+              port: "{{port}}"
+              namespace: "{{namespace}}"
+              taskQueue: "{{taskQueue}}"
+              workflowType: "{{workflowType}}"
+              workflowId: "{{?workflowId}}"
+              workflowExecutionTimeoutSeconds: "{{workflowExecutionTimeoutSeconds}}"

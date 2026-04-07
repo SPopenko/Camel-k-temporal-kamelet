@@ -1,0 +1,73 @@
+apiVersion: camel.apache.org/v1
+kind: Kamelet
+metadata:
+  name: temporal-workflow-query-action
+  labels:
+    camel.apache.org/kamelet.type: "action"
+  annotations:
+    camel.apache.org/kamelet.support.level: "Preview"
+    camel.apache.org/catalog.version: "1.0.0"
+    camel.apache.org/provider: "Community"
+    camel.apache.org/kamelet.group: "Temporal"
+    camel.apache.org/kamelet.namespace: "Workflow"
+    camel.apache.org/display-name: "Temporal Query Workflow Action"
+    camel.apache.org/description: >-
+      Query the current state of a running Temporal workflow.
+      The response body contains the query result as a string.
+      This is a synchronous operation that blocks until the worker responds.
+spec:
+  definition:
+    title: "Temporal Query Workflow Action"
+    description: "Queries the current state of a running Temporal workflow"
+    required:
+      - host
+      - workflowId
+      - queryType
+    type: object
+    properties:
+      host:
+        title: Temporal Host
+        description: Hostname of the Temporal frontend gRPC service
+        type: string
+        default: "localhost"
+        x-descriptors:
+          - urn:camel:group:connection
+      port:
+        title: Temporal Port
+        description: gRPC port of the Temporal frontend service
+        type: integer
+        default: 7233
+        x-descriptors:
+          - urn:camel:group:connection
+      namespace:
+        title: Namespace
+        description: Temporal namespace for workflow isolation
+        type: string
+        default: "default"
+      workflowId:
+        title: Workflow ID
+        description: The ID of the running workflow instance to query
+        type: string
+      queryType:
+        title: Query Type
+        description: >-
+          Name of the query method defined on the workflow interface
+          (must match @QueryMethod name annotation)
+        type: string
+  types:
+    in:
+      mediaType: application/json
+    out:
+      mediaType: application/json
+  template:
+    from:
+      uri: "kamelet:source"
+      steps:
+        - to:
+            uri: "temporal:query"
+            parameters:
+              host: "{{host}}"
+              port: "{{port}}"
+              namespace: "{{namespace}}"
+              workflowId: "{{workflowId}}"
+              queryType: "{{queryType}}"
