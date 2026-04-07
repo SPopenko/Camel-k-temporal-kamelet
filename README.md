@@ -19,6 +19,7 @@ An Apache Camel component and set of Camel-K Kamelets for integrating with [Temp
 - **Java 17+**
 - **Maven 3.8+**
 - **Docker & Docker Compose** — for running a local Temporal server (only needed for integration testing; unit tests use an in-memory environment)
+- **`kubectl`, `kamel`, and `kind`** — only required for the Camel K end-to-end suite under `e2e/`
 
 ---
 
@@ -32,9 +33,10 @@ An Apache Camel component and set of Camel-K Kamelets for integrating with [Temp
 │   │   ├── java/org/apache/camel/component/temporal/
 │   │   │   ├── TemporalComponent.java         ← Camel component factory
 │   │   │   ├── TemporalConfiguration.java     ← URI parameter config
+│   │   │   ├── TemporalConstants.java         ← Exchange header names
 │   │   │   ├── TemporalEndpoint.java          ← WorkflowClient lifecycle
 │   │   │   ├── TemporalProducer.java          ← start/signal/query dispatch
-│   │   │   └── TemporalConstants.java         ← Exchange header names
+│   │   │   └── TemporalRequestContext.java    ← Header/config resolution helpers
 │   │   └── resources/
 │   │       ├── META-INF/services/org/apache/camel/component/temporal
 │   │       └── kamelets/
@@ -42,11 +44,18 @@ An Apache Camel component and set of Camel-K Kamelets for integrating with [Temp
 │   │           ├── temporal-workflow-signal-action.kamelet.yaml
 │   │           └── temporal-workflow-query-action.kamelet.yaml
 │   └── test/
-│       └── java/org/apache/camel/component/temporal/
-│           ├── TemporalProducerTest.java
-│           └── workflow/
-│               ├── GreetingWorkflow.java
-│               └── GreetingWorkflowImpl.java
+│       ├── java/org/apache/camel/component/temporal/
+│       │   ├── TemporalDockerIT.java
+│       │   ├── TemporalProducerTest.java
+│       │   ├── TemporalTestSupport.java
+│       │   └── workflow/
+│       │       ├── GreetingWorkflow.java
+│       │       └── GreetingWorkflowImpl.java
+│       └── resources/log4j2-test.xml
+└── e2e/
+    ├── apps/                                  ← Camel K route-runner and Temporal worker apps
+    ├── k8s/                                   ← kind and Temporal manifests
+    └── scripts/                               ← setup, scenario, and teardown scripts
 ```
 
 ---
@@ -169,6 +178,8 @@ temporal:signal?host=localhost&port=7233&namespace=default&workflowId=myId&signa
 temporal:query?host=localhost&port=7233&namespace=default&workflowId=myId&queryType=getStatus
 ```
 
+If `host` already contains an explicit target such as `temporal.default.svc.cluster.local:7233`, the component uses it directly instead of appending `port`.
+
 ### Exchange Headers
 
 Headers allow per-message parameter override at runtime:
@@ -183,6 +194,8 @@ Headers allow per-message parameter override at runtime:
 | `CamelTemporalTaskQueue` | `TEMPORAL_TASK_QUEUE` | in | Override task queue |
 | `CamelTemporalWorkflowResult` | `TEMPORAL_WORKFLOW_RESULT` | out | Query result (set after query) |
 
+For `query`, the current producer implementation expects the workflow query handler to return a `String`.
+
 ---
 
 ## Examples
@@ -192,7 +205,7 @@ Headers allow per-message parameter override at runtime:
 **Java DSL:**
 ```java
 from("timer:trigger?repeatCount=1")
-    .setBody(constant("{\"name\":\"Alice\"}"))
+    .setBody(constant("Alice"))
     .to("temporal:start?host=localhost&port=7233&namespace=default"
       + "&taskQueue=greetings&workflowType=GreetingWorkflow")
     .log("Started workflow: ${header.CamelTemporalWorkflowId}");
@@ -208,7 +221,7 @@ from("timer:trigger?repeatCount=1")
         repeatCount: 1
     steps:
       - set-body:
-          constant: '{"name":"Alice"}'
+          constant: "Alice"
       - kamelet:
           name: temporal-workflow-start-action
           properties:
@@ -286,8 +299,8 @@ from("timer:poll?period=5000")
 
 | Parameter | Default | Required | Description |
 |-----------|---------|----------|-------------|
-| `host` | `localhost` | No | Temporal frontend hostname |
-| `port` | `7233` | No | Temporal frontend gRPC port |
+| `host` | `localhost` | No | Temporal frontend hostname or explicit `host:port` target |
+| `port` | `7233` | No | Temporal frontend gRPC port (used when `host` is not already an explicit target) |
 | `namespace` | `default` | No | Temporal namespace |
 
 ### Start Operation Parameters
@@ -295,7 +308,7 @@ from("timer:poll?period=5000")
 | Parameter | Default | Required | Description |
 |-----------|---------|----------|-------------|
 | `taskQueue` | — | **Yes** | Worker task queue name |
-| `workflowType` | — | **Yes** | Workflow type (interface simple name) |
+| `workflowType` | — | **Yes** | Workflow type name |
 | `workflowId` | *(auto UUID)* | No | Workflow instance ID |
 | `workflowExecutionTimeoutSeconds` | `3600` | No | Execution timeout (0 = unlimited) |
 
