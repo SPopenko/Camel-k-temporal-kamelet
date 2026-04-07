@@ -12,6 +12,8 @@ import java.io.Serializable;
 @UriParams
 public class TemporalConfiguration implements Cloneable, Serializable {
 
+    private static final long serialVersionUID = 1L;
+
     @UriParam(defaultValue = "localhost", description = "Temporal frontend service hostname")
     private String host = "localhost";
 

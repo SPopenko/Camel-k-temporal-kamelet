@@ -19,13 +19,17 @@ import java.util.UUID;
  *
  * Operation dispatch is based on the URI path (e.g., temporal://start, temporal://signal).
  * Configuration can be overridden per-message via Exchange headers (see TemporalConstants).
+ *
+ * Note: the query operation returns the workflow's query result as a String. Query handler
+ * implementations must return a type that Temporal's data converter serializes to a JSON string
+ * (or a plain String). Complex return types are not currently supported.
  */
 public class TemporalProducer extends DefaultProducer {
 
     private static final Logger LOG = LoggerFactory.getLogger(TemporalProducer.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final TemporalEndpoint endpoint;
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public TemporalProducer(TemporalEndpoint endpoint) {
         super(endpoint);
@@ -91,12 +95,11 @@ public class TemporalProducer extends DefaultProducer {
         LOG.info("Started workflow: type={}, workflowId={}, runId={}",
                  workflowType, execution.getWorkflowId(), execution.getRunId());
 
-        // Set result headers
-        exchange.getIn().setHeader(TemporalConstants.TEMPORAL_WORKFLOW_ID,
-                                    execution.getWorkflowId());
-        exchange.getIn().setHeader(TemporalConstants.TEMPORAL_WORKFLOW_RUN_ID,
-                                    execution.getRunId());
-        // Return workflowId as body for easy downstream chaining
+        // Use getMessage() consistently for all output so headers and body are on the same message
+        exchange.getMessage().setHeader(TemporalConstants.TEMPORAL_WORKFLOW_ID,
+                                         execution.getWorkflowId());
+        exchange.getMessage().setHeader(TemporalConstants.TEMPORAL_WORKFLOW_RUN_ID,
+                                         execution.getRunId());
         exchange.getMessage().setBody(execution.getWorkflowId());
     }
 
@@ -136,11 +139,14 @@ public class TemporalProducer extends DefaultProducer {
         WorkflowStub stub = client.newUntypedWorkflowStub(workflowId,
             Optional.empty(), Optional.empty());
 
+        // Query result is returned as String. Workflow query handlers must return a String
+        // or a type that Temporal's data converter serializes to a plain JSON string.
         String result = stub.query(queryType, String.class);
 
         LOG.info("Query '{}' on workflowId={} returned: {}", queryType, workflowId, result);
+        // Use getMessage() consistently for all output
         exchange.getMessage().setBody(result);
-        exchange.getIn().setHeader(TemporalConstants.TEMPORAL_WORKFLOW_RESULT, result);
+        exchange.getMessage().setHeader(TemporalConstants.TEMPORAL_WORKFLOW_RESULT, result);
     }
 
     private String getHeader(Exchange exchange, String headerName, String fallback) {
@@ -162,6 +168,6 @@ public class TemporalProducer extends DefaultProducer {
         if (body instanceof String s) {
             return s;
         }
-        return objectMapper.writeValueAsString(body);
+        return OBJECT_MAPPER.writeValueAsString(body);
     }
 }
