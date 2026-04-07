@@ -62,7 +62,7 @@ An Apache Camel component and set of Camel-K Kamelets for integrating with [Temp
 
 ## Build & Test
 
-### Run unit tests (no server needed)
+### Unit tests
 
 Unit tests use Temporal's in-memory `TestWorkflowEnvironment` — no Docker or external server required.
 
@@ -70,17 +70,7 @@ Unit tests use Temporal's in-memory `TestWorkflowEnvironment` — no Docker or e
 mvn clean test
 ```
 
-### Run Docker-backed integration tests
-
-These tests require a real Temporal server running from `docker-compose`.
-
-```bash
-docker-compose up -d
-mvn -Pdocker-it verify
-docker-compose down
-```
-
-`mvn test` runs only the in-memory unit tests. `mvn -Pdocker-it verify` runs the unit suite plus the live Docker-backed suite in `src/test/java/org/apache/camel/component/temporal/TemporalDockerIT.java`.
+`mvn test` runs only the in-memory unit suite.
 
 ### Build the JAR
 
@@ -88,11 +78,9 @@ docker-compose down
 mvn clean package
 ```
 
----
+### Local Temporal stack
 
-## Running Locally with Docker Compose
-
-Start a local Temporal server (gRPC on port 7233, Web UI on port 8088):
+Start the local Temporal stack from `docker-compose.yml`:
 
 ```bash
 docker-compose up -d
@@ -101,30 +89,17 @@ docker-compose up -d
 Wait ~10 seconds for Temporal to initialize, then access:
 - **Web UI**: http://localhost:8088
 - **gRPC frontend**: `localhost:7233`
+- **PostgreSQL**: `localhost:5432`
 
-Stop the server:
+Stop the stack when finished:
 
 ```bash
 docker-compose down
 ```
 
-After the compose stack is up you can run the live CamelContext integration suite with:
+### Docker-backed integration tests
 
-```bash
-mvn -Pdocker-it verify
-```
-
-That suite starts a real Temporal worker in the test JVM and verifies:
-- Java DSL `start`, `signal`, and `query`
-- Kamelet `start`, `signal`, and `query`
-
----
-
-## Integration Tests
-
-### Docker Compose Integration Suite
-
-This suite uses the local `docker-compose.yml` Temporal stack on `localhost:7233`.
+These tests require the local Temporal stack to be running. They execute the unit suite plus the live Docker-backed suite in `src/test/java/org/apache/camel/component/temporal/TemporalDockerIT.java`.
 
 ```bash
 docker-compose up -d
@@ -132,7 +107,11 @@ mvn -Pdocker-it verify
 docker-compose down
 ```
 
-### Camel K End-to-End Suite on kind
+That suite starts a real Temporal worker in the test JVM and verifies:
+- Java DSL `start`, `signal`, and `query`
+- Kamelet `start`, `signal`, and `query`
+
+### Camel K end-to-end suite on `kind`
 
 This suite provisions a local `kind` cluster, installs Camel K, deploys Temporal inside Kubernetes, deploys a Temporal worker, then runs Camel K integrations that exercise the same `start`, `signal`, and `query` workflow flow end to end.
 
@@ -142,19 +121,19 @@ Prerequisites:
 - `kamel`
 - network access to download `kind` on first run
 
-Bootstrap the environment:
+Set up the environment:
 
 ```bash
 ./e2e/scripts/setup-kind.sh
 ```
 
-Run the full end-to-end scenario:
+Run the full scenario:
 
 ```bash
 ./e2e/scripts/run-camelk-e2e.sh
 ```
 
-Tear the local cluster down when finished:
+Tear the cluster down when finished:
 
 ```bash
 ./e2e/scripts/teardown-kind.sh
