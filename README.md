@@ -51,8 +51,8 @@ An Apache Camel component for integrating with [Temporal.io](https://temporal.io
 ├── samples/
 │   ├── pom.xml
 │   ├── Dockerfile
-│   ├── scripts/deploy.sh                     ← Build & deploy to kind cluster
-│   ├── k8s/                                  ← Kubernetes manifests
+│   ├── scripts/                               ← setup-env / deploy / teardown scripts
+│   ├── k8s/                                   ← kind-config + Temporal manifests
 │   ├── worker/                               ← Demo Temporal workflow worker
 │   └── camel-http-temporal/                  ← Camel HTTP → Temporal routes
 └── e2e/
@@ -160,21 +160,31 @@ The `samples/` directory contains a complete working example of the Camel Tempor
    # Response: {"workflowId":"...","queryType":"getStatus","result":"COMPLETED"}
    ```
 
-### Deploying to Kubernetes
+### Deploying to Kubernetes (full setup from scratch)
 
-Assumes a kind cluster is already running.
+1. Set up the environment (kind cluster + Docker registry + Camel K operator + Temporal):
+   ```bash
+   ./samples/scripts/setup-env.sh
+   ```
 
-```bash
-./samples/scripts/deploy.sh
-```
+2. Build and deploy the sample apps via Camel K (`kamel run --image`):
+   ```bash
+   ./samples/scripts/deploy.sh
+   ```
 
-The script builds Docker images, loads them into kind, and deploys Temporal + the worker + the Camel HTTP app. Once deployed:
+3. Access the HTTP API:
+   ```bash
+   kubectl -n camel-temporal-sample port-forward svc/camel-http-temporal 8080:8080
+   ```
 
-```bash
-kubectl -n camel-temporal-sample port-forward svc/camel-http-temporal 8080:8080
-```
+   Then use the same curl commands above.
 
-Then use the same curl commands above.
+4. Tear down when done:
+   ```bash
+   ./samples/scripts/teardown.sh
+   ```
+
+The deploy script builds fat-JAR Docker images (YAML DSL routes bundled inside), pushes them to the local registry, deploys the Temporal worker as a plain Deployment, and deploys the Camel HTTP route as a self-managed Camel K Integration via `kamel run --image`.
 
 ---
 

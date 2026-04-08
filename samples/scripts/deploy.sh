@@ -1,71 +1,55 @@
 #!/usr/bin/env bash
+# Builds the component + sample JARs, pushes Docker images to the local
+# registry, and deploys the worker + Camel HTTP route via Camel K.
+#
+# Prerequisites: run setup-env.sh first (or have a kind cluster with Camel K
+# and Temporal already running).
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-SAMPLES_DIR="$PROJECT_ROOT/samples"
-NAMESPACE="camel-temporal-sample"
-
-log() { echo "==> $*"; }
+source "${SCRIPT_DIR}/common.sh"
 
 # ── Build ────────────────────────────────────────────────────────────────────
 
 log "Building component JAR"
-mvn -q -f "$PROJECT_ROOT/pom.xml" -DskipTests clean install
+mvn -q -f "${ROOT_DIR}/pom.xml" -DskipTests clean install
 
 log "Building sample JARs"
-mvn -q -f "$SAMPLES_DIR/pom.xml" clean package
+mvn -q -f "${SAMPLES_DIR}/pom.xml" clean package
 
 # ── Docker images ────────────────────────────────────────────────────────────
 
-log "Building worker image"
-docker build -t camel-temporal-sample/worker:latest \
-  --build-arg APP_MODULE=worker \
-  -f "$SAMPLES_DIR/Dockerfile" "$PROJECT_ROOT"
+build_and_push_image worker "${WORKER_IMAGE_REPO}" "${IMAGE_TAG}"
+build_and_push_image camel-http-temporal "${ROUTE_IMAGE_REPO}" "${IMAGE_TAG}"
 
-log "Building camel-http-temporal image"
-docker build -t camel-temporal-sample/camel-http-temporal:latest \
-  --build-arg APP_MODULE=camel-http-temporal \
-  -f "$SAMPLES_DIR/Dockerfile" "$PROJECT_ROOT"
-
-# ── Load into kind ───────────────────────────────────────────────────────────
-
-log "Loading images into kind cluster"
-kind load docker-image camel-temporal-sample/worker:latest
-kind load docker-image camel-temporal-sample/camel-http-temporal:latest
+WORKER_IMAGE="$(cluster_image_ref "${WORKER_IMAGE_REPO}" "${IMAGE_TAG}")"
+ROUTE_IMAGE="$(cluster_image_ref "${ROUTE_IMAGE_REPO}" "${IMAGE_TAG}")"
 
 # ── Deploy to Kubernetes ─────────────────────────────────────────────────────
 
-log "Deploying Temporal server"
-kubectl apply -f "$SAMPLES_DIR/k8s/temporal.yaml"
+deploy_worker "${WORKER_IMAGE}"
 
-log "Waiting for Temporal frontend to be ready"
-kubectl -n "$NAMESPACE" rollout status deployment/temporal-postgres --timeout=120s
-kubectl -n "$NAMESPACE" rollout status deployment/temporal-frontend --timeout=120s
+log "Waiting for worker to register with Temporal"
+wait_for_log_pattern "-l app=temporal-worker" "TEMPORAL_WORKER_READY|Started Worker"
 
-log "Deploying demo worker"
-kubectl apply -f "$SAMPLES_DIR/k8s/worker-deployment.yaml"
-
-log "Deploying Camel HTTP app"
-kubectl apply -f "$SAMPLES_DIR/k8s/camel-http-temporal-deployment.yaml"
-
-log "Waiting for all pods to be ready"
-kubectl -n "$NAMESPACE" rollout status deployment/demo-worker --timeout=120s
-kubectl -n "$NAMESPACE" rollout status deployment/camel-http-temporal --timeout=120s
+deploy_camel_route "${ROUTE_IMAGE}"
 
 # ── Done ─────────────────────────────────────────────────────────────────────
 
 log "Deployment complete!"
 echo ""
 echo "To access the HTTP API, run:"
-echo "  kubectl -n $NAMESPACE port-forward svc/camel-http-temporal 8080:8080"
+echo "  kubectl -n ${NAMESPACE} port-forward svc/camel-http-temporal 8080:8080"
 echo ""
 echo "Then test with:"
 echo "  # Start a workflow"
-echo '  curl -s -X POST http://localhost:8080/workflow/start -H "Content-Type: application/json" -d '"'"'"Alice"'"'"''
+echo '  curl -s -X POST http://localhost:8080/workflow/start \'
+echo '    -H "Content-Type: application/json" -d '"'"'"Alice"'"'"''
 echo ""
 echo "  # Query workflow status (replace <workflowId> with actual ID)"
 echo "  curl -s http://localhost:8080/workflow/<workflowId>/query/getStatus"
 echo ""
 echo "  # Signal workflow (approve)"
-echo '  curl -s -X POST http://localhost:8080/workflow/<workflowId>/signal/approve -H "Content-Type: application/json" -d '"'"'"manager"'"'"''
+echo '  curl -s -X POST http://localhost:8080/workflow/<workflowId>/signal/approve \'
+echo '    -H "Content-Type: application/json" -d '"'"'"manager"'"'"''

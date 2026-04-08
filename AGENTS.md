@@ -10,7 +10,9 @@ Custom Apache Camel component enabling Camel routes to interact with Temporal.io
 - `mvn clean package` — build the JAR
 - `docker-compose up -d` — start local Temporal server (port 7233, Web UI on 8088)
 - `mvn -f samples/pom.xml clean package` — build sample JARs
-- `./samples/scripts/deploy.sh` — build images and deploy samples to kind cluster
+- `./samples/scripts/setup-env.sh` — provision full environment (kind + registry + Camel K + Temporal)
+- `./samples/scripts/deploy.sh` — build images and deploy samples via Camel K (`kamel run --image`)
+- `./samples/scripts/teardown.sh` — delete kind cluster and Docker registry
 - `./e2e/scripts/setup-kind.sh` / `./e2e/scripts/run-camelk-e2e.sh` — run the Camel K end-to-end suite on `kind`
 
 ## Project Structure
@@ -43,11 +45,19 @@ Custom Apache Camel component enabling Camel routes to interact with Temporal.io
 ├── samples/
 │   ├── pom.xml
 │   ├── Dockerfile
-│   ├── scripts/deploy.sh
+│   ├── scripts/
+│   │   ├── common.sh
+│   │   ├── setup-env.sh
+│   │   ├── deploy.sh
+│   │   ├── teardown.sh
+│   │   └── lib/
+│   │       ├── base.sh
+│   │       ├── cluster.sh
+│   │       ├── images.sh
+│   │       └── deploy.sh
 │   ├── k8s/
-│   │   ├── temporal.yaml
-│   │   ├── worker-deployment.yaml
-│   │   └── camel-http-temporal-deployment.yaml
+│   │   ├── kind-config.yaml
+│   │   └── temporal.yaml
 │   ├── worker/                          ← Demo Temporal workflow worker
 │   └── camel-http-temporal/             ← HTTP routes → Temporal component
 └── e2e/
@@ -114,8 +124,11 @@ temporal:query?host=localhost&port=7233&namespace=default&workflowId=myId&queryT
   - `POST /workflow/start` → `temporal:start`
   - `POST /workflow/{workflowId}/signal/{signalName}` → `temporal:signal`
   - `GET /workflow/{workflowId}/query/{queryType}` → `temporal:query`
-- `samples/scripts/deploy.sh` — builds images and deploys to kind cluster (assumes cluster already running)
-- `samples/k8s/` — Kubernetes manifests for Temporal, worker, and Camel HTTP app
+- `samples/scripts/setup-env.sh` — provisions full environment from scratch (kind + registry + Camel K operator + Temporal)
+- `samples/scripts/deploy.sh` — builds images, pushes to registry, deploys worker + Camel route via `kamel run --image`
+- `samples/scripts/teardown.sh` — deletes kind cluster and Docker registry
+- `samples/scripts/lib/` — shared shell functions (base, cluster, images, deploy) adapted from `e2e/scripts/lib/`
+- `samples/k8s/` — Kubernetes manifests (kind-config.yaml, temporal.yaml)
 
 ## Implementation Status
 - [x] pom.xml
@@ -125,7 +138,7 @@ temporal:query?host=localhost&port=7233&namespace=default&workflowId=myId&queryT
 - [x] docker-compose.yml
 - [x] Docker-backed integration test profile
 - [x] HTTP samples (worker + camel-http-temporal)
-- [x] Kubernetes deployment manifests and deploy script
+- [x] Kubernetes deployment via Camel K self-managed integration (`kamel run --image`)
 - [x] Camel K end-to-end harness under `e2e/`
 - [x] README.md
 - [x] Tests passing — `mvn clean test` → 4/4 GREEN
