@@ -49,8 +49,28 @@ deploy_camel_route() {
   "${KAMEL_BIN}" run \
     --name camel-http-temporal \
     --namespace "${NAMESPACE}" \
-    --image "${image}" \
-    --wait
+    --env "TEMPORAL_HOST=temporal-frontend.${NAMESPACE}.svc.cluster.local" \
+    --env "TEMPORAL_PORT=7233" \
+    --env "TEMPORAL_NAMESPACE=default" \
+    --env "TEMPORAL_TASK_QUEUE=greetings" \
+    --image "${image}"
+
+  kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Service
+metadata:
+  name: camel-http-temporal
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    camel.apache.org/integration: camel-http-temporal
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+EOF
+
+  kubectl rollout status deployment/camel-http-temporal -n "${NAMESPACE}" --timeout=300s
 }
 
 wait_for_log_pattern() {

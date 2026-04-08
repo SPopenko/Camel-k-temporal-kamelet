@@ -33,7 +33,7 @@ class TemporalProducerTest {
         testEnv.start();
         workflowClient = testEnv.getWorkflowClient();
 
-        camelContext = TemporalTestSupport.startCamelContext(false);
+        camelContext = TemporalTestSupport.startCamelContext();
         template = camelContext.createProducerTemplate();
     }
 
