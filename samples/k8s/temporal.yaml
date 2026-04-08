@@ -1,0 +1,120 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: camel-temporal-sample
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal-postgres
+  namespace: camel-temporal-sample
+spec:
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+  selector:
+    app: temporal-postgres
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-postgres
+  namespace: camel-temporal-sample
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: temporal-postgres
+  template:
+    metadata:
+      labels:
+        app: temporal-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: temporal
+            - name: POSTGRES_USER
+              value: temporal
+            - name: POSTGRES_PASSWORD
+              value: temporal
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U temporal -d temporal
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U temporal -d temporal
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal-frontend
+  namespace: camel-temporal-sample
+spec:
+  ports:
+    - name: grpc
+      port: 7233
+      targetPort: 7233
+  selector:
+    app: temporal-frontend
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-frontend
+  namespace: camel-temporal-sample
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: temporal-frontend
+  template:
+    metadata:
+      labels:
+        app: temporal-frontend
+    spec:
+      containers:
+        - name: temporal
+          image: temporalio/auto-setup:1.24.2
+          ports:
+            - containerPort: 7233
+          env:
+            - name: DB
+              value: postgres12
+            - name: DB_PORT
+              value: "5432"
+            - name: POSTGRES_USER
+              value: temporal
+            - name: POSTGRES_PWD
+              value: temporal
+            - name: POSTGRES_SEEDS
+              value: temporal-postgres
+            - name: TEMPORAL_ADDRESS
+              value: temporal-frontend:7233
+            - name: TEMPORAL_CLI_ADDRESS
+              value: temporal-frontend:7233
+          readinessProbe:
+            tcpSocket:
+              port: 7233
+            initialDelaySeconds: 20
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 7233
+            initialDelaySeconds: 30
+            periodSeconds: 10

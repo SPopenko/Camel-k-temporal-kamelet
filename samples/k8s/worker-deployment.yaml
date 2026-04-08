@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-worker
+  namespace: camel-temporal-sample
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-worker
+  template:
+    metadata:
+      labels:
+        app: demo-worker
+    spec:
+      containers:
+        - name: worker
+          image: camel-temporal-sample/worker:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: TEMPORAL_TARGET
+              value: "dns:///temporal-frontend.camel-temporal-sample.svc.cluster.local:7233"
+            - name: TEMPORAL_NAMESPACE
+              value: default
+            - name: TEMPORAL_TASK_QUEUE
+              value: greetings

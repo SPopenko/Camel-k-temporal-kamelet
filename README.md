@@ -1,16 +1,16 @@
-# Camel-K Temporal Kamelet
+# Camel Temporal Component
 
-An Apache Camel component and set of Camel-K Kamelets for integrating with [Temporal.io](https://temporal.io) workflow engine. Enables Camel routes and pipelines to start workflows, send signals to running workflows, and query workflow state — without writing any low-level Temporal SDK code.
+An Apache Camel component for integrating with [Temporal.io](https://temporal.io) workflow engine. Enables Camel routes to start workflows, send signals to running workflows, and query workflow state — without writing any low-level Temporal SDK code.
 
 ---
 
 ## Features
 
-| Kamelet | Operation | Description |
+| Operation | URI | Description |
 |---|---|---|
-| `temporal-workflow-start-action` | `temporal:start` | Start a new Temporal workflow execution |
-| `temporal-workflow-signal-action` | `temporal:signal` | Send a signal/event to a running workflow |
-| `temporal-workflow-query-action` | `temporal:query` | Query the current state of a workflow |
+| Start | `temporal:start` | Start a new Temporal workflow execution |
+| Signal | `temporal:signal` | Send a signal/event to a running workflow |
+| Query | `temporal:query` | Query the current state of a workflow |
 
 ---
 
@@ -19,7 +19,7 @@ An Apache Camel component and set of Camel-K Kamelets for integrating with [Temp
 - **Java 17+**
 - **Maven 3.8+**
 - **Docker & Docker Compose** — for running a local Temporal server (only needed for integration testing; unit tests use an in-memory environment)
-- **`kubectl`, `kamel`, and `kind`** — only required for the Camel K end-to-end suite under `e2e/`
+- **`kubectl` and `kind`** — only required for the Kubernetes samples under `samples/` and the e2e suite under `e2e/`
 
 ---
 
@@ -38,11 +38,7 @@ An Apache Camel component and set of Camel-K Kamelets for integrating with [Temp
 │   │   │   ├── TemporalProducer.java          ← start/signal/query dispatch
 │   │   │   └── TemporalRequestContext.java    ← Header/config resolution helpers
 │   │   └── resources/
-│   │       ├── META-INF/services/org/apache/camel/component/temporal
-│   │       └── kamelets/
-│   │           ├── temporal-workflow-start-action.kamelet.yaml
-│   │           ├── temporal-workflow-signal-action.kamelet.yaml
-│   │           └── temporal-workflow-query-action.kamelet.yaml
+│   │       └── META-INF/services/org/apache/camel/component/temporal
 │   └── test/
 │       ├── java/org/apache/camel/component/temporal/
 │       │   ├── TemporalDockerIT.java
@@ -52,6 +48,13 @@ An Apache Camel component and set of Camel-K Kamelets for integrating with [Temp
 │       │       ├── GreetingWorkflow.java
 │       │       └── GreetingWorkflowImpl.java
 │       └── resources/log4j2-test.xml
+├── samples/
+│   ├── pom.xml
+│   ├── Dockerfile
+│   ├── scripts/deploy.sh                     ← Build & deploy to kind cluster
+│   ├── k8s/                                  ← Kubernetes manifests
+│   ├── worker/                               ← Demo Temporal workflow worker
+│   └── camel-http-temporal/                  ← Camel HTTP → Temporal routes
 └── e2e/
     ├── apps/                                  ← Camel K route-runner and Temporal worker apps
     ├── k8s/                                   ← kind and Temporal manifests
@@ -69,8 +72,6 @@ Unit tests use Temporal's in-memory `TestWorkflowEnvironment` — no Docker or e
 ```bash
 mvn clean test
 ```
-
-`mvn test` runs only the in-memory unit suite.
 
 ### Build the JAR
 
@@ -107,43 +108,73 @@ mvn -Pdocker-it verify
 docker-compose down
 ```
 
-That suite starts a real Temporal worker in the test JVM and verifies:
-- Java DSL `start`, `signal`, and `query`
-- Kamelet `start`, `signal`, and `query`
+That suite starts a real Temporal worker in the test JVM and verifies Java DSL `start`, `signal`, and `query` operations.
 
-### Camel K end-to-end suite on `kind`
+---
 
-This suite provisions a local `kind` cluster, installs Camel K, deploys Temporal inside Kubernetes, deploys a Temporal worker, then runs Camel K integrations that exercise the same `start`, `signal`, and `query` workflow flow end to end.
+## Samples
 
-Prerequisites:
-- Docker
-- `kubectl`
-- `kamel`
-- network access to download `kind` on first run
+The `samples/` directory contains a complete working example of the Camel Temporal component exposed via HTTP endpoints.
 
-Set up the environment:
+### Running locally
+
+1. Start Temporal:
+   ```bash
+   docker-compose up -d
+   ```
+
+2. Build the component and samples:
+   ```bash
+   mvn clean install -DskipTests
+   mvn -f samples/pom.xml clean package
+   ```
+
+3. Start the demo workflow worker:
+   ```bash
+   java -jar samples/worker/target/app.jar
+   ```
+
+4. In another terminal, start the Camel HTTP app:
+   ```bash
+   java -jar samples/camel-http-temporal/target/app.jar
+   ```
+
+5. Test with curl:
+   ```bash
+   # Start a workflow
+   curl -s -X POST http://localhost:8080/workflow/start \
+     -H "Content-Type: application/json" -d '"Alice"'
+   # Response: {"workflowId":"...","runId":"..."}
+
+   # Query workflow status
+   curl -s http://localhost:8080/workflow/<workflowId>/query/getStatus
+   # Response: {"workflowId":"...","queryType":"getStatus","result":"AWAITING_APPROVAL"}
+
+   # Signal the workflow (approve)
+   curl -s -X POST http://localhost:8080/workflow/<workflowId>/signal/approve \
+     -H "Content-Type: application/json" -d '"manager"'
+   # Response: {"status":"signaled","workflowId":"..."}
+
+   # Query again
+   curl -s http://localhost:8080/workflow/<workflowId>/query/getStatus
+   # Response: {"workflowId":"...","queryType":"getStatus","result":"COMPLETED"}
+   ```
+
+### Deploying to Kubernetes
+
+Assumes a kind cluster is already running.
 
 ```bash
-./e2e/scripts/setup-kind.sh
+./samples/scripts/deploy.sh
 ```
 
-Run the full scenario:
+The script builds Docker images, loads them into kind, and deploys Temporal + the worker + the Camel HTTP app. Once deployed:
 
 ```bash
-./e2e/scripts/run-camelk-e2e.sh
+kubectl -n camel-temporal-sample port-forward svc/camel-http-temporal 8080:8080
 ```
 
-Tear the cluster down when finished:
-
-```bash
-./e2e/scripts/teardown-kind.sh
-```
-
-Notes:
-- The Camel K suite uses `kind`, not `docker-compose`.
-- The Camel K integrations run from self-managed images built from `e2e/apps`, while the operator still manages the deployment lifecycle.
-- The Temporal worker image registers `GreetingWorkflowImpl` on the `greetings` task queue.
-- The route runner image packages the Temporal component and Kamelets, then executes the `start`, `signal`, and `query` flows as one-shot Camel K integrations.
+Then use the same curl commands above.
 
 ---
 
@@ -181,7 +212,6 @@ For `query`, the current producer implementation expects the workflow query hand
 
 ### 1. Start a Workflow
 
-**Java DSL:**
 ```java
 from("timer:trigger?repeatCount=1")
     .setBody(constant("Alice"))
@@ -190,32 +220,8 @@ from("timer:trigger?repeatCount=1")
     .log("Started workflow: ${header.CamelTemporalWorkflowId}");
 ```
 
-**Camel-K YAML route using the Kamelet:**
-```yaml
-- route:
-    id: start-workflow
-    from:
-      uri: "timer:trigger"
-      parameters:
-        repeatCount: 1
-    steps:
-      - set-body:
-          constant: "Alice"
-      - kamelet:
-          name: temporal-workflow-start-action
-          properties:
-            host: localhost
-            port: 7233
-            namespace: default
-            taskQueue: greetings
-            workflowType: GreetingWorkflow
-      - log:
-          message: "Started: ${header.CamelTemporalWorkflowId}"
-```
-
 ### 2. Send a Signal to a Running Workflow
 
-**Java DSL:**
 ```java
 from("direct:approve")
     .setHeader("CamelTemporalWorkflowId", simple("${header.workflowId}"))
@@ -223,51 +229,33 @@ from("direct:approve")
     .to("temporal:signal?host=localhost&port=7233&signalName=approve");
 ```
 
-**Camel-K YAML route using the Kamelet:**
-```yaml
-- route:
-    id: signal-workflow
-    from:
-      uri: "direct:approve"
-    steps:
-      - kamelet:
-          name: temporal-workflow-signal-action
-          properties:
-            host: localhost
-            port: 7233
-            namespace: default
-            workflowId: "my-workflow-id"
-            signalName: approve
-```
-
 ### 3. Query Workflow State
 
-**Java DSL:**
 ```java
 from("timer:poll?period=5000")
     .to("temporal:query?host=localhost&port=7233&workflowId=my-workflow&queryType=getStatus")
     .log("Current status: ${body}");
 ```
 
-**Camel-K YAML route using the Kamelet:**
+### 4. YAML Route with HTTP (see `samples/camel-http-temporal`)
+
 ```yaml
 - route:
-    id: query-workflow
+    id: start-workflow
     from:
-      uri: "timer:poll"
+      uri: platform-http:/workflow/start
       parameters:
-        period: 5000
+        httpMethodRestrict: POST
     steps:
-      - kamelet:
-          name: temporal-workflow-query-action
-          properties:
+      - to:
+          uri: "temporal:start"
+          parameters:
             host: localhost
             port: 7233
-            namespace: default
-            workflowId: "my-workflow-id"
-            queryType: getStatus
-      - log:
-          message: "Status: ${body}"
+            taskQueue: greetings
+            workflowType: GreetingWorkflow
+      - setBody:
+          simple: '{"workflowId":"${header.CamelTemporalWorkflowId}"}'
 ```
 
 ---
@@ -311,7 +299,7 @@ from("timer:poll?period=5000")
 
 1. Install the Camel-K operator in your namespace
 2. Build and deploy the component JAR to your local Maven repository or OCI registry
-3. Reference the Kamelets in your Integration YAML with the `dependencies` section pointing to this artifact
+3. Reference the component in your Integration YAML:
 
 ```yaml
 apiVersion: camel.apache.org/v1
@@ -320,15 +308,15 @@ metadata:
   name: temporal-example
 spec:
   dependencies:
-    - mvn:org.apache.camel.kamelets:camel-temporal-kamelet:1.0.0-SNAPSHOT
+    - mvn:org.apache.camel.component:camel-temporal:1.0.0-SNAPSHOT
   flows:
     - route:
         from:
           uri: "timer:tick?period=10000"
         steps:
-          - kamelet:
-              name: temporal-workflow-start-action
-              properties:
+          - to:
+              uri: "temporal:start"
+              parameters:
                 host: "temporal.default.svc.cluster.local"
                 taskQueue: my-queue
                 workflowType: MyWorkflow
@@ -338,10 +326,9 @@ spec:
 
 ## Implementing a Temporal Worker
 
-The Camel component is a **client** — it starts, signals, and queries workflows. You also need a **worker** that runs the workflow code. Example using the Temporal Java SDK:
+The Camel component is a **client** — it starts, signals, and queries workflows. You also need a **worker** that runs the workflow code. See `samples/worker/` for a complete example, or implement your own:
 
 ```java
-// Define your workflow interface
 @WorkflowInterface
 public interface GreetingWorkflow {
     @WorkflowMethod
@@ -354,7 +341,6 @@ public interface GreetingWorkflow {
     String getStatus();
 }
 
-// Implement it
 public class GreetingWorkflowImpl implements GreetingWorkflow {
     private String status = "PENDING";
     private String approvedBy = null;
@@ -377,7 +363,6 @@ public class GreetingWorkflowImpl implements GreetingWorkflow {
     public String getStatus() { return status; }
 }
 
-// Start the worker
 WorkflowServiceStubs service = WorkflowServiceStubs.newLocalServiceStubs();
 WorkflowClient client = WorkflowClient.newInstance(service);
 WorkerFactory factory = WorkerFactory.newInstance(client);

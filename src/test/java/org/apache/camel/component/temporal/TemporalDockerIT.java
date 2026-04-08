@@ -17,7 +17,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -65,7 +64,7 @@ class TemporalDockerIT {
 
     @BeforeEach
     void setUp() throws Exception {
-        camelContext = TemporalTestSupport.startCamelContext(true, dockerRoutes());
+        camelContext = TemporalTestSupport.startCamelContext(dockerRoutes());
         template = camelContext.createProducerTemplate();
     }
 
@@ -119,55 +118,6 @@ class TemporalDockerIT {
         TemporalTestSupport.signalWorkflow(workflowClient, workflowId, "approve", "cleanup-java");
     }
 
-    @Test
-    void testKameletStartFlow() {
-        Exchange exchange = template.request("direct:kamelet-start", e -> e.getIn().setBody("Diana"));
-
-        assertNull(exchange.getException());
-        String workflowId = exchange.getMessage().getBody(String.class);
-        assertNotNull(workflowId);
-        assertNotNull(exchange.getMessage().getHeader(TemporalConstants.TEMPORAL_WORKFLOW_RUN_ID, String.class));
-    }
-
-    @Test
-    void testKameletSignalFlow() {
-        String workflowId = TemporalTestSupport.startGreetingWorkflow(workflowClient, TASK_QUEUE, "Eve", "docker-it-");
-
-        Exchange exchange = template.request("direct:kamelet-signal", e -> {
-            e.getIn().setHeader("workflowId", workflowId);
-            e.getIn().setBody("manager-kamelet");
-        });
-
-        assertNull(exchange.getException());
-        assertNull(exchange.getMessage().getBody());
-        assertTrue(
-            TemporalTestSupport.getWorkflowResult(workflowClient, workflowId, Duration.ofSeconds(10))
-                .contains("manager-kamelet"));
-    }
-
-    @Test
-    void testKameletQueryFlow() {
-        String workflowId = TemporalTestSupport.startGreetingWorkflow(workflowClient, TASK_QUEUE, "Frank", "docker-it-");
-        TemporalTestSupport.waitForWorkflowStatus(
-            workflowClient,
-            workflowId,
-            Duration.ofSeconds(5),
-            "PENDING",
-            "AWAITING_APPROVAL");
-
-        Exchange exchange = template.request("direct:kamelet-query", e -> e.getIn().setHeader("workflowId", workflowId));
-
-        assertNull(exchange.getException());
-        assertEquals(
-            exchange.getMessage().getBody(String.class),
-            exchange.getMessage().getHeader(TemporalConstants.TEMPORAL_WORKFLOW_RESULT, String.class));
-        assertTrue(
-            "PENDING".equals(exchange.getMessage().getBody(String.class))
-                || "AWAITING_APPROVAL".equals(exchange.getMessage().getBody(String.class)));
-
-        TemporalTestSupport.signalWorkflow(workflowClient, workflowId, "approve", "cleanup-kamelet");
-    }
-
     private static String javaStartUri() {
         return "temporal:start?host=127.0.0.1&port=7233&namespace=" + NAMESPACE
             + "&taskQueue=" + TASK_QUEUE
@@ -185,32 +135,6 @@ class TemporalDockerIT {
             + "&queryType=getStatus";
     }
 
-    private static String kameletStartUri() {
-        return "kamelet:temporal-workflow-start-action"
-            + "?host=127.0.0.1"
-            + "&port=7233"
-            + "&namespace=" + NAMESPACE
-            + "&taskQueue=" + TASK_QUEUE
-            + "&workflowType=GreetingWorkflow"
-            + "&workflowExecutionTimeoutSeconds=30";
-    }
-
-    private static String kameletSignalUri() {
-        return "kamelet:temporal-workflow-signal-action"
-            + "?host=127.0.0.1"
-            + "&port=7233"
-            + "&namespace=" + NAMESPACE
-            + "&signalName=approve";
-    }
-
-    private static String kameletQueryUri() {
-        return "kamelet:temporal-workflow-query-action"
-            + "?host=127.0.0.1"
-            + "&port=7233"
-            + "&namespace=" + NAMESPACE
-            + "&queryType=getStatus";
-    }
-
     private RouteBuilder dockerRoutes() {
         return new RouteBuilder() {
             @Override
@@ -225,16 +149,6 @@ class TemporalDockerIT {
                 from("direct:java-query")
                     .setHeader(TemporalConstants.TEMPORAL_WORKFLOW_ID, header("workflowId"))
                     .to(javaQueryUri());
-
-                from("direct:kamelet-start")
-                    .to(kameletStartUri());
-
-                from("direct:kamelet-signal")
-                    .setHeader("workflowId", header("workflowId"))
-                    .toD(kameletSignalUri() + "&workflowId=${header.workflowId}");
-
-                from("direct:kamelet-query")
-                    .toD(kameletQueryUri() + "&workflowId=${header.workflowId}");
             }
         };
     }
