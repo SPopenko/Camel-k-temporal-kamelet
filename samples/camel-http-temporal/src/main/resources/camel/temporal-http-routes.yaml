@@ -1,0 +1,70 @@
+- route:
+    id: start-workflow
+    from:
+      uri: platform-http:/workflow/start
+      parameters:
+        httpMethodRestrict: POST
+    steps:
+      - to:
+          uri: "temporal:start"
+          parameters:
+            host: "{{temporal.host}}"
+            port: "{{temporal.port}}"
+            namespace: "{{temporal.namespace}}"
+            taskQueue: "{{temporal.taskQueue}}"
+            workflowType: GreetingWorkflow
+      - setBody:
+          simple: '{"workflowId":"${header.CamelTemporalWorkflowId}","runId":"${header.CamelTemporalWorkflowRunId}"}'
+      - setHeader:
+          name: Content-Type
+          constant: application/json
+
+- route:
+    id: signal-workflow
+    from:
+      uri: platform-http:/workflow/{workflowId}/signal/{signalName}
+      parameters:
+        httpMethodRestrict: POST
+    steps:
+      - setHeader:
+          name: CamelTemporalWorkflowId
+          simple: "${header.workflowId}"
+      - setHeader:
+          name: CamelTemporalSignalName
+          simple: "${header.signalName}"
+      - to:
+          uri: "temporal:signal"
+          parameters:
+            host: "{{temporal.host}}"
+            port: "{{temporal.port}}"
+            namespace: "{{temporal.namespace}}"
+      - setBody:
+          simple: '{"status":"signaled","workflowId":"${header.workflowId}"}'
+      - setHeader:
+          name: Content-Type
+          constant: application/json
+
+- route:
+    id: query-workflow
+    from:
+      uri: platform-http:/workflow/{workflowId}/query/{queryType}
+      parameters:
+        httpMethodRestrict: GET
+    steps:
+      - setHeader:
+          name: CamelTemporalWorkflowId
+          simple: "${header.workflowId}"
+      - setHeader:
+          name: CamelTemporalQueryType
+          simple: "${header.queryType}"
+      - to:
+          uri: "temporal:query"
+          parameters:
+            host: "{{temporal.host}}"
+            port: "{{temporal.port}}"
+            namespace: "{{temporal.namespace}}"
+      - setBody:
+          simple: '{"workflowId":"${header.workflowId}","queryType":"${header.queryType}","result":"${body}"}'
+      - setHeader:
+          name: Content-Type
+          constant: application/json

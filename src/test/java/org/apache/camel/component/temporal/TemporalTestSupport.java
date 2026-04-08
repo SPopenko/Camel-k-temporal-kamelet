@@ -14,7 +14,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.builder.RouteBuilder;
-import org.apache.camel.component.kamelet.KameletComponent;
 import org.apache.camel.component.temporal.workflow.GreetingWorkflow;
 import org.apache.camel.component.temporal.workflow.GreetingWorkflowImpl;
 import org.apache.camel.impl.DefaultCamelContext;
@@ -30,14 +29,9 @@ final class TemporalTestSupport {
         return worker;
     }
 
-    static DefaultCamelContext startCamelContext(boolean withKamelets, RouteBuilder... routes) throws Exception {
+    static DefaultCamelContext startCamelContext(RouteBuilder... routes) throws Exception {
         DefaultCamelContext camelContext = new DefaultCamelContext();
         camelContext.addComponent("temporal", new TemporalComponent());
-
-        if (withKamelets) {
-            KameletComponent kameletComponent = camelContext.getComponent("kamelet", KameletComponent.class);
-            kameletComponent.setLocation("classpath:kamelets");
-        }
 
         for (RouteBuilder route : routes) {
             camelContext.addRoutes(route);

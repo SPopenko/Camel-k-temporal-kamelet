@@ -1,7 +1,7 @@
-# Camel-K Temporal Kamelet — Agent Context
+# Camel Temporal Component — Agent Context
 
 ## Project Purpose
-Custom Apache Camel component + Kamelet YAML definitions enabling Camel-K routes to interact with Temporal.io workflows (start workflow, send signals, query state) without low-level SDK code.
+Custom Apache Camel component enabling Camel routes to interact with Temporal.io workflows (start workflow, send signals, query state) without low-level SDK code. Includes HTTP-based samples for local and Kubernetes deployment.
 
 ## Build
 - Language: Java 17, Maven
@@ -9,40 +9,57 @@ Custom Apache Camel component + Kamelet YAML definitions enabling Camel-K routes
 - `mvn -Pdocker-it verify` — run unit tests plus Docker-backed integration tests against local Temporal
 - `mvn clean package` — build the JAR
 - `docker-compose up -d` — start local Temporal server (port 7233, Web UI on 8088)
+- `mvn -f samples/pom.xml clean package` — build sample JARs
+- `./samples/scripts/setup-env.sh` — provision full environment (kind + registry + Camel K + Temporal)
+- `./samples/scripts/deploy.sh` — build images and deploy samples via Camel K (`kamel run --image`)
+- `./samples/scripts/teardown.sh` — delete kind cluster and Docker registry
 - `./e2e/scripts/setup-kind.sh` / `./e2e/scripts/run-camelk-e2e.sh` — run the Camel K end-to-end suite on `kind`
 
 ## Project Structure
 ```
-/Users/sergeypopenko/Projects/Prototypes/Camel-k-temporal-kamelet/
 ├── AGENTS.md                    ← this file
 ├── LICENSE
 ├── README.md
 ├── docker-compose.yml
 ├── pom.xml
 ├── src/
-    ├── main/
-    │   ├── java/org/apache/camel/component/temporal/
-    │   │   ├── TemporalComponent.java
-    │   │   ├── TemporalConfiguration.java
-    │   │   ├── TemporalConstants.java
-    │   │   ├── TemporalEndpoint.java
-    │   │   ├── TemporalProducer.java
-    │   │   └── TemporalRequestContext.java
-    │   └── resources/
-    │       ├── META-INF/services/org/apache/camel/component/temporal
-    │       └── kamelets/
-    │           ├── temporal-workflow-start-action.kamelet.yaml
-    │           ├── temporal-workflow-signal-action.kamelet.yaml
-    │           └── temporal-workflow-query-action.kamelet.yaml
-    └── test/
-        ├── java/org/apache/camel/component/temporal/
-        │   ├── TemporalDockerIT.java
-        │   ├── TemporalProducerTest.java
-        │   ├── TemporalTestSupport.java
-        │   └── workflow/
-        │       ├── GreetingWorkflow.java
-        │       └── GreetingWorkflowImpl.java
-        └── resources/log4j2-test.xml
+│   ├── main/
+│   │   ├── java/org/apache/camel/component/temporal/
+│   │   │   ├── TemporalComponent.java
+│   │   │   ├── TemporalConfiguration.java
+│   │   │   ├── TemporalConstants.java
+│   │   │   ├── TemporalEndpoint.java
+│   │   │   ├── TemporalProducer.java
+│   │   │   └── TemporalRequestContext.java
+│   │   └── resources/
+│   │       └── META-INF/services/org/apache/camel/component/temporal
+│   └── test/
+│       ├── java/org/apache/camel/component/temporal/
+│       │   ├── TemporalDockerIT.java
+│       │   ├── TemporalProducerTest.java
+│       │   ├── TemporalTestSupport.java
+│       │   └── workflow/
+│       │       ├── GreetingWorkflow.java
+│       │       └── GreetingWorkflowImpl.java
+│       └── resources/log4j2-test.xml
+├── samples/
+│   ├── pom.xml
+│   ├── Dockerfile
+│   ├── scripts/
+│   │   ├── common.sh
+│   │   ├── setup-env.sh
+│   │   ├── deploy.sh
+│   │   ├── teardown.sh
+│   │   └── lib/
+│   │       ├── base.sh
+│   │       ├── cluster.sh
+│   │       ├── images.sh
+│   │       └── deploy.sh
+│   ├── k8s/
+│   │   ├── kind-config.yaml
+│   │   └── temporal.yaml
+│   ├── worker/                          ← Demo Temporal workflow worker
+│   └── camel-http-temporal/             ← HTTP routes → Temporal component
 └── e2e/
     ├── apps/
     │   ├── route-runner/
@@ -54,6 +71,7 @@ Custom Apache Camel component + Kamelet YAML definitions enabling Camel-K routes
 ## Key Packages
 - Main: `org.apache.camel.component.temporal`
 - Tests: `org.apache.camel.component.temporal` + `org.apache.camel.component.temporal.workflow`
+- Samples: `org.apache.camel.component.temporal.sample`
 
 ## Architecture Summary
 
@@ -100,14 +118,27 @@ temporal:query?host=localhost&port=7233&namespace=default&workflowId=myId&queryT
 - Docker-backed integration tests live in `TemporalDockerIT` and run via `mvn -Pdocker-it verify`
 - Camel K end-to-end assets live under `e2e/` and cover the full `start -> query -> signal -> query` path on `kind`
 
+## Samples
+- `samples/worker/` — standalone Temporal worker running `GreetingWorkflowImpl` (configurable via `TEMPORAL_TARGET`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE` env vars)
+- `samples/camel-http-temporal/` — Camel app exposing HTTP endpoints that forward to the `temporal:` component:
+  - `POST /workflow/start` → `temporal:start`
+  - `POST /workflow/{workflowId}/signal/{signalName}` → `temporal:signal`
+  - `GET /workflow/{workflowId}/query/{queryType}` → `temporal:query`
+- `samples/scripts/setup-env.sh` — provisions full environment from scratch (kind + registry + Camel K operator + Temporal)
+- `samples/scripts/deploy.sh` — builds images, pushes to registry, deploys worker + Camel route via `kamel run --image`
+- `samples/scripts/teardown.sh` — deletes kind cluster and Docker registry
+- `samples/scripts/lib/` — shared shell functions (base, cluster, images, deploy) adapted from `e2e/scripts/lib/`
+- `samples/k8s/` — Kubernetes manifests (kind-config.yaml, temporal.yaml)
+
 ## Implementation Status
 - [x] pom.xml
 - [x] Java source files
-- [x] Kamelet YAMLs
 - [x] Service discovery
 - [x] Test files
 - [x] docker-compose.yml
 - [x] Docker-backed integration test profile
+- [x] HTTP samples (worker + camel-http-temporal)
+- [x] Kubernetes deployment via Camel K self-managed integration (`kamel run --image`)
 - [x] Camel K end-to-end harness under `e2e/`
 - [x] README.md
 - [x] Tests passing — `mvn clean test` → 4/4 GREEN
